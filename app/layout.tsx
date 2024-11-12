@@ -1,27 +1,23 @@
-import type { Metadata } from "next";
-import "./globals.css";
-import { ThemeProvider } from "next-themes";
-import { Noto_Sans_Arabic } from "next/font/google";
+import { defaultMetadata } from './config/metadata'
+import { Metadata } from 'next'
+import { ThemeProvider } from "next-themes"
+import "./globals.css"
 
-const notoArabic = Noto_Sans_Arabic({
-  weight: "400",
-  subsets: ["arabic"],
-  variable: "--font-noto-arabic",
-});
-
-export const metadata: Metadata = {
-  title: "الأجرة",
-  description: "تطبيق لحساب الأجرة في المواصلات العامة",
-};
+export const metadata: Metadata = defaultMetadata
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: {
+  children: React.ReactNode
+}) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
-      <body className={`${notoArabic.variable} antialiased`}>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#ffffff" />
+        <link rel="apple-touch-icon" href="/icon-192x192.png" />
+      </head>
+      <body>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -32,5 +28,5 @@ export default function RootLayout({
         </ThemeProvider>
       </body>
     </html>
-  );
+  )
 }
