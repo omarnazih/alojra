@@ -47,4 +47,7 @@ export const defaultMetadata: Metadata = {
       'max-snippet': -1,
     },
   },
+  verification: {
+    google: '072123a6fc07b9e8',
+  },
 } 
