@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Bus, Car, Settings } from "lucide-react";
+import { Bus, Car, Settings, User } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -17,9 +17,10 @@ import {
 } from "@/components/ui/sheet";
 import { vehiclePresets, type VehicleType } from '../types/vehicles';
 import { type Passenger } from '../types/passenger';
-import { Moon, Sun, RotateCcw } from "lucide-react";
+import { Moon, Sun, RotateCcw, Info } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Footer } from "@/components/footer";
+import { Instructions } from "@/components/instructions";
 
 const getVehicleIcon = (type: VehicleType) => {
   switch (type) {
@@ -54,6 +55,8 @@ export default function Home() {
   const { theme, setTheme } = useTheme();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
+  const [isAutoOpened, setIsAutoOpened] = useState(false);
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -82,6 +85,23 @@ export default function Home() {
       passengers
     }));
   }, [selectedVehicle, costPerPerson, customCapacity, passengers]);
+
+  // Check if we should show instructions on mount
+  useEffect(() => {
+    const dontShowAgain = localStorage.getItem('dontShowInstructions');
+    if (!dontShowAgain) {
+      setInstructionsOpen(true);
+      setIsAutoOpened(true);
+    }
+  }, []);
+
+  const handleDontShowAgain = (checked: boolean) => {
+    if (checked) {
+      localStorage.setItem('dontShowInstructions', 'true');
+    } else {
+      localStorage.removeItem('dontShowInstructions');
+    }
+  };
 
   const getCapacity = () => {
     const preset = vehiclePresets.find(v => v.type === selectedVehicle);
@@ -190,6 +210,15 @@ export default function Home() {
 
   return (
     <>
+      <Instructions 
+        open={instructionsOpen} 
+        onOpenChange={(open) => {
+          setInstructionsOpen(open);
+          if (!open) setIsAutoOpened(false);
+        }}
+        onDontShowAgain={handleDontShowAgain}
+        isAutoOpened={isAutoOpened}
+      />
       <main className="container mx-auto p-4 pb-20 max-w-3xl">
         <div className="flex justify-between items-center mb-8">
           <Button
@@ -200,7 +229,20 @@ export default function Home() {
           >
             <RotateCcw className="h-4 w-4" />
           </Button>
-          <h1 className="text-3xl font-bold text-center">حاسبة الأجرة</h1>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setIsAutoOpened(false);
+                setInstructionsOpen(true);
+              }}
+              className="h-10 w-10 rounded-full"
+            >
+              <Info className="h-4 w-4" />
+            </Button>
+            <h1 className="text-3xl font-bold text-center">حاسبة الأجرة</h1>
+          </div>
           <Button
             variant="outline"
             size="icon"
@@ -285,7 +327,10 @@ export default function Home() {
                 }`}
                 onClick={() => setSelectedPassenger(passenger)}
               >
-                <h3 className="text-lg font-semibold">راكب {passenger.seatNumber}</h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <User className="h-5 w-5" />
+                  <h3 className="text-lg font-semibold">راكب {passenger.seatNumber}</h3>
+                </div>
                 <div className="space-y-2">
                   <p>دفع: {passenger.paid} جنية</p>
                   {passenger.paid > 0 && !passenger.changeGiven && (
