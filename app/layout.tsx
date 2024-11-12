@@ -1,4 +1,4 @@
-import { defaultMetadata } from './config/metadata'
+import { defaultMetadata } from '@/config/metadata'
 import { Metadata } from 'next'
 import { ThemeProvider } from "next-themes"
 import "./globals.css"
