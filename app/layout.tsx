@@ -3,6 +3,7 @@ import { Metadata } from 'next'
 import { ThemeProvider } from "next-themes"
 import "./globals.css"
 import Script from 'next/script'
+import { ErrorBoundary } from '@/components/error-boundary'
 
 export const metadata: Metadata = defaultMetadata
 
@@ -25,7 +26,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </ThemeProvider>
         <Script
           strategy="afterInteractive"

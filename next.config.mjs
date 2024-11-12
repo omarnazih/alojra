@@ -6,12 +6,22 @@ const nextConfig = {
   swcMinify: true,
   images: {
     formats: ['image/avif', 'image/webp'],
-    domains: ['your-domain.com'],
+    domains: ['ojra.vercel.app'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   experimental: {
     optimizeCss: true,
+  },
+  webpack: (config, { dev, isServer }) => {
+    if (!dev && !isServer) {
+      config.optimization.splitChunks.cacheGroups.critters = {
+        test: /[\\/]node_modules[\\/]critters[\\/]/,
+        name: 'critters',
+        chunks: 'all',
+      }
+    }
+    return config
   },
 }
 
