@@ -165,18 +165,19 @@ export default function Home() {
 
   const handleCostChange = (cost: number) => {
     if (cost < 0) return;
-    setCostPerPerson(cost);
-    initializePassengers(selectedVehicle, cost);
+    const validCost = isNaN(cost) ? 0 : cost;
+    setCostPerPerson(validCost);
+    initializePassengers(selectedVehicle, validCost);
   };
 
   const handleCustomCapacityChange = (capacity: number) => {
     if (capacity < 0) return;
-    setCustomCapacity(capacity);
+    setCustomCapacity(isNaN(capacity) ? 0 : capacity);
   };
 
   const handlePaymentAmountChange = (amount: number) => {
     if (amount < 0) return;
-    setPaymentAmount(amount);
+    setPaymentAmount(isNaN(amount) ? 0 : amount);
   };
 
   const handleReset = () => {
@@ -231,7 +232,7 @@ export default function Home() {
             <Input
               type="number"
               min="0"
-              value={customCapacity}
+              value={customCapacity || ''}
               onChange={(e) => handleCustomCapacityChange(Number(e.target.value))}
               className="h-12"
             />
@@ -243,7 +244,7 @@ export default function Home() {
           <Input
             type="number"
             min="0"
-            value={costPerPerson}
+            value={costPerPerson || ''}
             onChange={(e) => handleCostChange(Number(e.target.value))}
             className="h-12"
           />
@@ -347,7 +348,7 @@ export default function Home() {
               <Input
                 type="number"
                 min="0"
-                value={paymentAmount}
+                value={paymentAmount || ''}
                 onChange={(e) => handlePaymentAmountChange(Number(e.target.value))}
                 placeholder="أدخل المبلغ"
               />
