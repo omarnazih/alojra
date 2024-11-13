@@ -22,6 +22,12 @@ import { Footer } from "@/components/footer";
 import { Instructions } from "@/components/instructions";
 import { Label } from "@/components/ui/label";
 
+const trackEvent = (eventName: string, properties?: Record<string, any>) => {
+  if (typeof window !== 'undefined' && (window as any).gtag) {
+    (window as any).gtag('event', eventName, properties);
+  }
+};
+
 const getVehicleIcon = (type: VehicleType) => {
   switch (type) {
     case 'microbus':
@@ -129,6 +135,7 @@ export default function Home() {
   };
 
   const handleVehicleSelect = (type: VehicleType) => {
+    trackEvent('vehicle_selected', { vehicle_type: type });
     setSelectedVehicle(type);
     initializePassengers(type, costPerPerson);
   };
@@ -144,6 +151,13 @@ export default function Home() {
       const amountPerPerson = Math.min(paymentAmount / totalPassengers, costPerPerson);
       const remainingAmount = paymentAmount - (amountPerPerson * totalPassengers);
       
+      trackEvent('payment_made', {
+        amount: paymentAmount,
+        passengers_count: totalPassengers,
+        amount_per_person: amountPerPerson,
+        remaining_amount: remainingAmount
+      });
+
       setPassengers(prev => prev.map(p => {
         if (p.id === passengerId) {
           return { 
@@ -165,7 +179,8 @@ export default function Home() {
       setPaymentAmount(0);
       setSelectedPassenger(null);
       setSelectedPassengersForPayment([]);
-    } catch (err) {
+    } catch (err: any) {
+      trackEvent('payment_error', { error: err.message });
       setError('حدث خطأ أثناء تسجيل الدفع');
     } finally {
       setIsProcessing(false);
@@ -177,7 +192,8 @@ export default function Home() {
     passengerId: number, 
     given: boolean
   ) => {
-    e.stopPropagation(); // Prevent card click when clicking checkbox
+    e.stopPropagation();
+    trackEvent('change_given', { passenger_id: passengerId, given });
     setPassengers(prev => prev.map(p => {
       if (p.id === passengerId) {
         return { ...p, changeGiven: given };
@@ -204,13 +220,16 @@ export default function Home() {
   const handleCostChange = (cost: number) => {
     if (cost < 0) return;
     const validCost = isNaN(cost) ? 0 : cost;
+    trackEvent('cost_changed', { new_cost: validCost });
     setCostPerPerson(validCost);
     initializePassengers(selectedVehicle, validCost);
   };
 
   const handleCustomCapacityChange = (capacity: number) => {
     if (capacity < 0) return;
-    setCustomCapacity(isNaN(capacity) ? 0 : capacity);
+    const validCapacity = isNaN(capacity) ? 0 : capacity;
+    trackEvent('custom_capacity_changed', { new_capacity: validCapacity });
+    setCustomCapacity(validCapacity);
   };
 
   const handlePaymentAmountChange = (amount: number) => {
@@ -219,6 +238,7 @@ export default function Home() {
   };
 
   const handleReset = () => {
+    trackEvent('app_reset');
     setCostPerPerson(resetState.costPerPerson);
     setCustomCapacity(resetState.customCapacity);
     setPassengers(resetState.passengers);
@@ -266,6 +286,7 @@ export default function Home() {
               variant="ghost"
               size="icon"
               onClick={() => {
+                trackEvent('instructions_opened');
                 setIsAutoOpened(false);
                 setInstructionsOpen(true);
               }}
@@ -278,7 +299,11 @@ export default function Home() {
           <Button
             variant="outline"
             size="icon"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            onClick={() => {
+              const newTheme = theme === 'dark' ? 'light' : 'dark';
+              trackEvent('theme_changed', { new_theme: newTheme });
+              setTheme(newTheme);
+            }}
             className="h-10 w-10 rounded-full"
           >
             <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
