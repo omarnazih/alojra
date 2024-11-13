@@ -32,14 +32,14 @@ export default function RootLayout({
         </ThemeProvider>
         <Script
           strategy="afterInteractive"
-          src={`https://www.googletagmanager.com/gtag/js?id=YOUR-MEASUREMENT-ID`}
+          src="https://www.googletagmanager.com/gtag/js?id=G-02CDXW81S6"
         />
         <Script id="google-analytics" strategy="afterInteractive">
           {`
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', 'YOUR-MEASUREMENT-ID');
+            gtag('config', 'G-02CDXW81S6');
           `}
         </Script>
       </body>
