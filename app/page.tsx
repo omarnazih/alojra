@@ -51,6 +51,8 @@ const resetState = {
   selectedPassenger: null
 };
 
+const PAYMENT_LIMIT = 10000;
+
 export default function Home() {
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>('microbus');
   const [costPerPerson, setCostPerPerson] = useState<number>(0);
@@ -219,6 +221,7 @@ export default function Home() {
 
   const handleCostChange = (cost: number) => {
     if (cost < 0) return;
+    if (cost > PAYMENT_LIMIT) return;
     const validCost = isNaN(cost) ? 0 : cost;
     trackEvent('cost_changed', { new_cost: validCost });
     setCostPerPerson(validCost);
@@ -234,6 +237,7 @@ export default function Home() {
 
   const handlePaymentAmountChange = (amount: number) => {
     if (amount < 0) return;
+    if (amount > PAYMENT_LIMIT) return;
     setPaymentAmount(isNaN(amount) ? 0 : amount);
   };
 
@@ -260,6 +264,13 @@ export default function Home() {
     return 'المبلغ مضبوط';
   };
 
+  const getTotalChange = () => {
+    return passengers.reduce((sum, passenger) => {
+      const change = passenger.paid > costPerPerson ? passenger.paid - costPerPerson : 0;
+      return sum + (passenger.changeGiven ? 0 : change);
+    }, 0);
+  };
+
   return (
     <>
       <Instructions 
@@ -272,16 +283,23 @@ export default function Home() {
         isAutoOpened={isAutoOpened}
       />
       <main className="container mx-auto p-4 pb-20 max-w-3xl">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center mb-8 relative p-4 rounded-lg bg-gradient-to-r from-primary/10 via-transparent to-primary/10 overflow-hidden">
+          <div className="absolute inset-0 opacity-30">
+            <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(68,68,68,.2)_25%,rgba(68,68,68,.2)_50%,transparent_50%,transparent_75%,rgba(68,68,68,.2)_75%)] bg-[length:10px_10px]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_500px_at_50%_50%,rgba(255,255,255,0.1),transparent)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[length:20px_20px]" />
+            <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[length:20px_20px]" />
+          </div>
+          
           <Button
             variant="outline"
             size="icon"
             onClick={handleReset}
-            className="h-10 w-10 rounded-full"
+            className="h-10 w-10 rounded-full relative z-10"
           >
             <RotateCcw className="h-4 w-4" />
           </Button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 relative z-10">
             <Button
               variant="ghost"
               size="icon"
@@ -304,7 +322,7 @@ export default function Home() {
               trackEvent('theme_changed', { new_theme: newTheme });
               setTheme(newTheme);
             }}
-            className="h-10 w-10 rounded-full"
+            className="h-10 w-10 rounded-full relative z-10"
           >
             <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
             <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -343,6 +361,7 @@ export default function Home() {
           <Input
             type="number"
             min="0"
+            max={PAYMENT_LIMIT}
             value={costPerPerson || ''}
             onChange={(e) => handleCostChange(Number(e.target.value))}
             className="h-12"
@@ -353,8 +372,16 @@ export default function Home() {
           <Card className="p-4 mb-6 bg-muted">
             <div className="grid grid-cols-2 gap-4">
               <div>
+                <h3 className="text-lg font-semibold">عدد الركاب</h3>
+                <p className="text-2xl font-bold">{getCapacity()}</p>
+              </div>
+              <div>
                 <h3 className="text-lg font-semibold">إجمالي الأجرة</h3>
                 <p className="text-2xl font-bold">{totalCost} جنية</p>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">تم تحصيل</h3>
+                <p className="text-2xl font-bold text-green-500">{getTotalPaid()} جنية</p>
               </div>
               <div>
                 <h3 className="text-lg font-semibold">المتبقي</h3>
@@ -363,12 +390,10 @@ export default function Home() {
                 </p>
               </div>
               <div>
-                <h3 className="text-lg font-semibold">تم تحصيل</h3>
-                <p className="text-2xl font-bold text-green-500">{getTotalPaid()} جنية</p>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">عدد الركاب</h3>
-                <p className="text-2xl font-bold">{getCapacity()}</p>
+                <h3 className="text-lg font-semibold">مجموع الباقي</h3>
+                <p className={`text-2xl font-bold ${getTotalChange() > 0 ? 'text-yellow-500' : 'text-green-500'}`}>
+                  {getTotalChange()} جنية
+                </p>
               </div>
             </div>
           </Card>
@@ -461,6 +486,7 @@ export default function Home() {
                 <Input
                   type="number"
                   min="0"
+                  max={PAYMENT_LIMIT}
                   value={paymentAmount || ''}
                   onChange={(e) => handlePaymentAmountChange(Number(e.target.value))}
                   placeholder="أدخل المبلغ"
