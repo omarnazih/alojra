@@ -7,20 +7,20 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Bus, Car, Settings, User } from "lucide-react";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-  SheetClose,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { vehiclePresets, type VehicleType } from '../types/vehicles';
 import { type Passenger } from '../types/passenger';
 import { Moon, Sun, RotateCcw, Info } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Footer } from "@/components/footer";
 import { Instructions } from "@/components/instructions";
+import { Label } from "@/components/ui/label";
 
 const getVehicleIcon = (type: VehicleType) => {
   switch (type) {
@@ -57,6 +57,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [isAutoOpened, setIsAutoOpened] = useState(false);
+  const [selectedPassengersForPayment, setSelectedPassengersForPayment] = useState<number[]>([]);
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -139,14 +140,31 @@ export default function Home() {
     setError(null);
     
     try {
+      const totalPassengers = selectedPassengersForPayment.length + 1;
+      const amountPerPerson = Math.min(paymentAmount / totalPassengers, costPerPerson);
+      const remainingAmount = paymentAmount - (amountPerPerson * totalPassengers);
+      
       setPassengers(prev => prev.map(p => {
         if (p.id === passengerId) {
-          return { ...p, paid: paymentAmount };
+          return { 
+            ...p, 
+            paid: amountPerPerson + remainingAmount,
+            paidFor: selectedPassengersForPayment 
+          };
+        }
+        if (selectedPassengersForPayment.includes(p.id)) {
+          return { 
+            ...p, 
+            paid: amountPerPerson,
+            paidBy: passengerId 
+          };
         }
         return p;
       }));
+      
       setPaymentAmount(0);
       setSelectedPassenger(null);
+      setSelectedPassengersForPayment([]);
     } catch (err) {
       setError('حدث خطأ أثناء تسجيل الدفع');
     } finally {
@@ -206,6 +224,20 @@ export default function Home() {
     setPassengers(resetState.passengers);
     setPaymentAmount(resetState.paymentAmount);
     setSelectedPassenger(resetState.selectedPassenger);
+  };
+
+  const getTotalRequired = () => {
+    return costPerPerson * (selectedPassengersForPayment.length + 1);
+  };
+
+  const getPaymentStatus = () => {
+    const total = getTotalRequired();
+    if (paymentAmount > total) {
+      return `الباقي للراكب: ${paymentAmount - total} جنية`;
+    } else if (paymentAmount < total) {
+      return `متبقي: ${total - paymentAmount} جنية`;
+    }
+    return 'المبلغ مضبوط';
   };
 
   return (
@@ -333,6 +365,16 @@ export default function Home() {
                 </div>
                 <div className="space-y-2">
                   <p>دفع: {passenger.paid} جنية</p>
+                  {passenger.paidBy && (
+                    <p className="text-sm text-muted-foreground">
+                      دفع عنه راكب {passengers.find(p => p.id === passenger.paidBy)?.seatNumber}
+                    </p>
+                  )}
+                  {passenger.paidFor && passenger.paidFor.length > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      دفع عن: {passenger.paidFor.map(id => passengers.find(p => p.id === id)?.seatNumber).join(', ')}
+                    </p>
+                  )}
                   {passenger.paid > 0 && !passenger.changeGiven && (
                     <p className={passenger.paid > costPerPerson ? 'text-red-500' : 'text-green-500'}>
                       {passenger.paid > costPerPerson 
@@ -361,12 +403,12 @@ export default function Home() {
           </div>
         )}
 
-        <Sheet 
+        <Dialog 
           open={!!selectedPassenger} 
-          onOpenChange={() => setSelectedPassenger(null)}
+          onOpenChange={(open) => !open && setSelectedPassenger(null)}
         >
-          <SheetContent 
-            side="right"
+          <DialogContent 
+            className="sm:max-w-[425px]"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && paymentAmount > 0) {
                 selectedPassenger && handlePayment(selectedPassenger.id);
@@ -376,43 +418,87 @@ export default function Home() {
               }
             }}
           >
-            <SheetHeader>
-              <SheetTitle>دفع الأجرة - راكب {selectedPassenger?.seatNumber}</SheetTitle>
-              <SheetDescription>
+            <DialogHeader>
+              <DialogTitle>دفع الأجرة - راكب {selectedPassenger?.seatNumber}</DialogTitle>
+              <DialogDescription>
                 المطلوب: {costPerPerson} جنية
                 {selectedPassenger?.paid && (
                   <p className="mt-2">
                     المدفوع حالياً: {selectedPassenger.paid} جنية
                   </p>
                 )}
-              </SheetDescription>
-            </SheetHeader>
+              </DialogDescription>
+            </DialogHeader>
             
-            <div className="mt-6">
-              <label className="text-sm font-medium mb-2 block">المبلغ المدفوع</label>
-              <Input
-                type="number"
-                min="0"
-                value={paymentAmount || ''}
-                onChange={(e) => handlePaymentAmountChange(Number(e.target.value))}
-                placeholder="أدخل المبلغ"
-              />
-              
+            <div className="mt-6 space-y-4">
+              <div>
+                <Label>المبلغ المدفوع</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={paymentAmount || ''}
+                  onChange={(e) => handlePaymentAmountChange(Number(e.target.value))}
+                  placeholder="أدخل المبلغ"
+                />
+              </div>
+
+              <div>
+                <Label>دفع عن الركاب</Label>
+                <div className="space-y-2 mt-2 max-h-40 overflow-y-auto border rounded-md p-2">
+                  <div className="flex items-center gap-2 pb-2 border-b">
+                    <Checkbox 
+                      id="select-all"
+                      checked={selectedPassengersForPayment.length === passengers.filter(p => !p.paid && p.id !== selectedPassenger?.id).length}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          const allUnpaidIds = passengers
+                            .filter(p => !p.paid && p.id !== selectedPassenger?.id)
+                            .map(p => p.id);
+                          setSelectedPassengersForPayment(allUnpaidIds);
+                        } else {
+                          setSelectedPassengersForPayment([]);
+                        }
+                      }}
+                    />
+                    <label htmlFor="select-all">تحديد الكل</label>
+                  </div>
+                  {passengers
+                    .filter(p => !p.paid && p.id !== selectedPassenger?.id)
+                    .map(p => (
+                      <div key={p.id} className="flex items-center gap-2">
+                        <Checkbox 
+                          id={`passenger-${p.id}`}
+                          checked={selectedPassengersForPayment.includes(p.id)}
+                          onCheckedChange={(checked) => {
+                            setSelectedPassengersForPayment(prev => 
+                              checked 
+                                ? [...prev, p.id]
+                                : prev.filter(id => id !== p.id)
+                            );
+                          }}
+                        />
+                        <label htmlFor={`passenger-${p.id}`}>راكب {p.seatNumber}</label>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
               {paymentAmount > 0 && (
-                <div className="mt-4 p-3 bg-muted rounded-lg">
-                  <p className={paymentAmount > costPerPerson ? 'text-red-500' : 'text-green-500'}>
-                    {paymentAmount > costPerPerson 
-                      ? `الباقي للراكب: ${getChangeAmount(paymentAmount)} جنية`
-                      : paymentAmount < costPerPerson 
-                        ? `متبقي على الراكب: ${costPerPerson - paymentAmount} جنية`
-                        : 'المبلغ مضبوط'
-                    }
+                <div className="p-3 bg-muted rounded-lg space-y-2">
+                  <p>
+                    عدد الركاب: {selectedPassengersForPayment.length + 1}
+                  </p>
+                  <p>
+                    الإجمالي المطلوب: {costPerPerson * (selectedPassengersForPayment.length + 1)} جنية
+                  </p>
+                  <p className={paymentAmount > getTotalRequired() ? 'text-red-500' : 'text-green-500'}>
+                    {getPaymentStatus()}
                   </p>
                 </div>
               )}
             </div>
 
-            <SheetFooter className="mt-6 flex flex-col gap-2">
+            <DialogFooter className="mt-6 flex flex-col gap-2">
               <Button 
                 onClick={() => selectedPassenger && handlePayment(selectedPassenger.id)}
                 disabled={!paymentAmount || isProcessing}
@@ -421,14 +507,16 @@ export default function Home() {
                 {isProcessing ? 'جاري التسجيل...' : 'تأكيد الدفع'}
               </Button>
               {error && <p className="text-red-500 text-sm">{error}</p>}
-              <SheetClose asChild>
-                <Button variant="outline" className="w-full">
-                  إلغاء
-                </Button>
-              </SheetClose>
-            </SheetFooter>
-          </SheetContent>
-        </Sheet>
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => setSelectedPassenger(null)}
+              >
+                إلغاء
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
       <Footer />
     </>

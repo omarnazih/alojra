@@ -3,4 +3,6 @@ export interface Passenger {
   paid: number;
   changeGiven: boolean;
   seatNumber: number;
+  paidBy?: number;
+  paidFor?: number[];
 } 
