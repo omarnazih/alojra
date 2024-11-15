@@ -53,6 +53,10 @@ const resetState = {
 
 const PAYMENT_LIMIT = 10000;
 
+const formatNumber = (value: number): number => {
+  return Number(Math.round(value * 100) / 100);
+};
+
 export default function Home() {
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleType>('microbus');
   const [costPerPerson, setCostPerPerson] = useState<number>(0);
@@ -150,8 +154,8 @@ export default function Home() {
     
     try {
       const totalPassengers = selectedPassengersForPayment.length + 1;
-      const amountPerPerson = Math.min(paymentAmount / totalPassengers, costPerPerson);
-      const remainingAmount = paymentAmount - (amountPerPerson * totalPassengers);
+      const amountPerPerson = formatNumber(Math.min(paymentAmount / totalPassengers, costPerPerson));
+      const remainingAmount = formatNumber(paymentAmount - (amountPerPerson * totalPassengers));
       
       trackEvent('payment_made', {
         amount: paymentAmount,
@@ -164,14 +168,14 @@ export default function Home() {
         if (p.id === passengerId) {
           return { 
             ...p, 
-            paid: amountPerPerson + remainingAmount,
+            paid: formatNumber(amountPerPerson + remainingAmount),
             paidFor: selectedPassengersForPayment 
           };
         }
         if (selectedPassengersForPayment.includes(p.id)) {
           return { 
             ...p, 
-            paid: amountPerPerson,
+            paid: formatNumber(amountPerPerson),
             paidBy: passengerId 
           };
         }
@@ -205,24 +209,24 @@ export default function Home() {
   };
 
   const getChangeAmount = (paid: number) => {
-    return paid - costPerPerson;
+    return formatNumber(paid - costPerPerson);
   };
 
   const getTotalPaid = () => {
-    return passengers.reduce((sum, passenger) => {
+    return formatNumber(passengers.reduce((sum, passenger) => {
       const effectivePaid = passenger.paid >= costPerPerson ? costPerPerson : passenger.paid;
       return sum + effectivePaid;
-    }, 0);
+    }, 0));
   };
 
   const getRemainingTotal = () => {
-    return totalCost - getTotalPaid();
+    return formatNumber(totalCost - getTotalPaid());
   };
 
   const handleCostChange = (cost: number) => {
     if (cost < 0) return;
     if (cost > PAYMENT_LIMIT) return;
-    const validCost = isNaN(cost) ? 0 : cost;
+    const validCost = isNaN(cost) ? 0 : formatNumber(cost);
     trackEvent('cost_changed', { new_cost: validCost });
     setCostPerPerson(validCost);
     initializePassengers(selectedVehicle, validCost);
@@ -238,7 +242,7 @@ export default function Home() {
   const handlePaymentAmountChange = (amount: number) => {
     if (amount < 0) return;
     if (amount > PAYMENT_LIMIT) return;
-    setPaymentAmount(isNaN(amount) ? 0 : amount);
+    setPaymentAmount(isNaN(amount) ? 0 : formatNumber(amount));
   };
 
   const handleReset = () => {
@@ -251,24 +255,24 @@ export default function Home() {
   };
 
   const getTotalRequired = () => {
-    return costPerPerson * (selectedPassengersForPayment.length + 1);
+    return formatNumber(costPerPerson * (selectedPassengersForPayment.length + 1));
   };
 
   const getPaymentStatus = () => {
     const total = getTotalRequired();
     if (paymentAmount > total) {
-      return `الباقي للراكب: ${paymentAmount - total} جنية`;
+      return `الباقي للراكب: ${formatNumber(paymentAmount - total)} جنية`;
     } else if (paymentAmount < total) {
-      return `متبقي: ${total - paymentAmount} جنية`;
+      return `متبقي: ${formatNumber(total - paymentAmount)} جنية`;
     }
     return 'المبلغ مضبوط';
   };
 
   const getTotalChange = () => {
-    return passengers.reduce((sum, passenger) => {
+    return formatNumber(passengers.reduce((sum, passenger) => {
       const change = passenger.paid > costPerPerson ? passenger.paid - costPerPerson : 0;
       return sum + (passenger.changeGiven ? 0 : change);
-    }, 0);
+    }, 0));
   };
 
   return (
@@ -362,6 +366,7 @@ export default function Home() {
             type="number"
             min="0"
             max={PAYMENT_LIMIT}
+            step="0.01"
             value={costPerPerson || ''}
             onChange={(e) => handleCostChange(Number(e.target.value))}
             className="h-12"
@@ -428,9 +433,9 @@ export default function Home() {
                   {passenger.paid > 0 && !passenger.changeGiven && (
                     <p className={passenger.paid > costPerPerson ? 'text-red-500' : 'text-green-500'}>
                       {passenger.paid > costPerPerson 
-                        ? `يجب إرجاع: ${passenger.paid - costPerPerson} جنية`
+                        ? `يجب إرجاع: ${formatNumber(passenger.paid - costPerPerson)} جنية`
                         : passenger.paid < costPerPerson 
-                          ? `متبقي: ${costPerPerson - passenger.paid} جنية`
+                          ? `متبقي: ${formatNumber(costPerPerson - passenger.paid)} جنية`
                           : 'تم الدفع بالكامل'
                       }
                     </p>
@@ -487,6 +492,7 @@ export default function Home() {
                   type="number"
                   min="0"
                   max={PAYMENT_LIMIT}
+                  step="0.01"
                   value={paymentAmount || ''}
                   onChange={(e) => handlePaymentAmountChange(Number(e.target.value))}
                   placeholder="أدخل المبلغ"
