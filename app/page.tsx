@@ -237,6 +237,19 @@ export default function Home() {
     const validCapacity = isNaN(capacity) ? 0 : capacity;
     trackEvent('custom_capacity_changed', { new_capacity: validCapacity });
     setCustomCapacity(validCapacity);
+    
+    // Initialize passengers when capacity changes
+    if (validCapacity > 0 && costPerPerson > 0) {
+      const newPassengers = Array.from({ length: validCapacity }, (_, index) => ({
+        id: index + 1,
+        paid: 0,
+        changeGiven: false,
+        seatNumber: index + 1
+      }));
+      setPassengers(newPassengers);
+    } else {
+      setPassengers([]);
+    }
   };
 
   const handlePaymentAmountChange = (amount: number) => {
@@ -488,6 +501,11 @@ export default function Home() {
             <div className="mt-6 space-y-4">
               <div>
                 <Label>المبلغ المدفوع</Label>
+                {paymentAmount > 0 && paymentAmount < getTotalRequired() && (
+                  <p className="text-sm text-red-500 mb-2">
+                    يجب إدخال المبلغ المطلوب ({getTotalRequired()} جنية) أو أكثر
+                  </p>
+                )}
                 <Input
                   type="number"
                   min="0"
@@ -558,7 +576,7 @@ export default function Home() {
             <DialogFooter className="mt-6 flex flex-col gap-2">
               <Button 
                 onClick={() => selectedPassenger && handlePayment(selectedPassenger.id)}
-                disabled={!paymentAmount || isProcessing}
+                disabled={!paymentAmount || isProcessing || paymentAmount < getTotalRequired()}
                 className="w-full"
               >
                 {isProcessing ? 'جاري التسجيل...' : 'تأكيد الدفع'}
