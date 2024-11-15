@@ -5,7 +5,10 @@ import "./globals.css"
 import Script from 'next/script'
 import { ErrorBoundary } from '@/components/error-boundary'
 
-export const metadata: Metadata = defaultMetadata
+export const metadata: Metadata = {
+  ...defaultMetadata,
+  manifest: '/manifest.json',
+}
 
 export default function RootLayout({
   children,
@@ -40,6 +43,22 @@ export default function RootLayout({
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
             gtag('config', 'G-02CDXW81S6');
+          `}
+        </Script>
+        <Script id="register-sw" strategy="afterInteractive">
+          {`
+            if ('serviceWorker' in navigator) {
+              window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js').then(
+                  function(registration) {
+                    console.log('ServiceWorker registration successful');
+                  },
+                  function(err) {
+                    console.log('ServiceWorker registration failed: ', err);
+                  }
+                );
+              });
+            }
           `}
         </Script>
       </body>
