@@ -21,6 +21,7 @@ import { useTheme } from "next-themes";
 import { Footer } from "@/components/footer";
 import { Instructions } from "@/components/instructions";
 import { Label } from "@/components/ui/label";
+import Image from 'next/image';
 
 const trackEvent = (eventName: string, properties?: Record<string, any>) => {
   if (typeof window !== 'undefined' && (window as any).gtag) {
@@ -274,7 +275,7 @@ export default function Home() {
   const getPaymentStatus = () => {
     const total = getTotalRequired();
     if (paymentAmount > total) {
-      return `الباقي للراكب: ${formatNumber(paymentAmount - total)} جنية`;
+      return `البقي للراكب: ${formatNumber(paymentAmount - total)} جنية`;
     } else if (paymentAmount < total) {
       return `متبقي: ${formatNumber(total - paymentAmount)} جنية`;
     }
@@ -329,7 +330,22 @@ export default function Home() {
             >
               <Info className="h-4 w-4" />
             </Button>
-            <h1 className="text-3xl font-bold text-center">حاسبة الأجرة</h1>
+            <div className="relative w-40 h-16">
+              <Image
+                src="/logo-light.png"
+                alt="حاسبة الأجرة"
+                fill
+                className="object-contain dark:hidden [&>*]:!whitespace-nowrap"
+                priority
+              />
+              <Image
+                src="/logo-dark.png"
+                alt="حاسبة الأجرة"
+                fill
+                className="object-contain hidden dark:block [&>*]:!whitespace-nowrap"
+                priority
+              />
+            </div>
           </div>
           <Button
             variant="outline"
@@ -395,7 +411,7 @@ export default function Home() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold">إجمالي الأجرة</h3>
-                <p className="text-2xl font-bold">{totalCost} جنية</p>
+                <p className="text-2xl font-bold">{formatNumber(totalCost)} جنية</p>
               </div>
               <div>
                 <h3 className="text-lg font-semibold">تم تحصيل</h3>

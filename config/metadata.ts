@@ -4,7 +4,8 @@ export const siteConfig = {
   name: 'حاسبة الأجرة',
   description: 'تطبيق لحساب أجرة المواصلات العامة وتتبع دفعات الركاب',
   url: 'https://ojra.vercel.app',
-  ogImage: 'https://ojra.vercel.app/og.jpg',
+  ogImage: 'https://ojra.vercel.app/logo-dark.png',
+  lightOgImage: 'https://ojra.vercel.app/logo-light.png',
   links: {
     twitter: '@omarnazihcs',
   }
@@ -16,7 +17,7 @@ export const defaultMetadata: Metadata = {
     template: `%s | ${siteConfig.name}`,
   },
   description: siteConfig.description,
-  keywords: ['حاسبة أجرة', 'مواصلات عامة', 'حساب التذاكر', 'باص', 'ميكروباص', 'تاكسي'],
+  keywords: ['مواصلات','مواصلات عامة', 'حاسبة أجرة', 'حساب التذاكر', 'باص', 'ميكروباص', 'تاكسي', 'الأجرة', 'مواصلات الرياض', 'مواصلات القاهرة', 'مواصلات الشرقية', 'مواصلات المنصورة', 'مواصلات الجيزة', 'مواصلات الإسكندرية', 'مواصلات الأقصر', 'مواصلات الأسكندرية', 'مواصلات الأسيوط', 'مواصلات البحيرة', 'مواصلات البورسعيد', 'فكة', 'الباقي'],
   authors: [{ name: 'Omar Nazih' }],
   creator: 'Omar Nazih',
   metadataBase: new URL(siteConfig.url),
@@ -27,13 +28,13 @@ export const defaultMetadata: Metadata = {
     title: siteConfig.name,
     description: siteConfig.description,
     siteName: siteConfig.name,
-    images: [{ url: siteConfig.ogImage }],
+    images: [{ url: siteConfig.ogImage }, { url: siteConfig.lightOgImage }],
   },
   twitter: {
     card: 'summary_large_image',
     title: siteConfig.name,
     description: siteConfig.description,
-    images: [siteConfig.ogImage],
+    images: [siteConfig.ogImage, siteConfig.lightOgImage],
     creator: siteConfig.links.twitter,
   },
   robots: {
