@@ -4,7 +4,7 @@ export const siteConfig = {
   name: 'حاسبة الأجرة',
   description: 'تطبيق لحساب أجرة المواصلات العامة وتتبع دفعات الركاب',
   url: 'https://alojra.vercel.app',
-  ogImage: 'https://alojra.vercel.app/logo-dark.png',
+  ogImage: 'https://alojra.vercel.app/icon-512x512.png',
   lightOgImage: 'https://alojra.vercel.app/logo-light.png',
   links: {
     twitter: '@omarnazihcs',

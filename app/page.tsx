@@ -318,18 +318,6 @@ export default function Home() {
             <RotateCcw className="h-4 w-4" />
           </Button>
           <div className="flex items-center gap-2 relative z-10">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                trackEvent('instructions_opened');
-                setIsAutoOpened(false);
-                setInstructionsOpen(true);
-              }}
-              className="h-10 w-10 rounded-full"
-            >
-              <Info className="h-4 w-4" />
-            </Button>
             <div className="relative w-40 h-16">
               <Image
                 src="/logo-light.png"
@@ -609,7 +597,13 @@ export default function Home() {
           </DialogContent>
         </Dialog>
       </main>
-      <Footer />
+      <Footer 
+        onInstructionsClick={() => {
+          trackEvent('instructions_opened');
+          setIsAutoOpened(false);
+          setInstructionsOpen(true);
+        }} 
+      />
     </>
   );
 }
