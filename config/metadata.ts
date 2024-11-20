@@ -3,9 +3,9 @@ import { Metadata } from 'next'
 export const siteConfig = {
   name: 'حاسبة الأجرة',
   description: 'تطبيق لحساب أجرة المواصلات العامة وتتبع دفعات الركاب',
-  url: 'https://ojra.vercel.app',
-  ogImage: 'https://ojra.vercel.app/logo-dark.png',
-  lightOgImage: 'https://ojra.vercel.app/logo-light.png',
+  url: 'https://alojra.vercel.app',
+  ogImage: 'https://alojra.vercel.app/logo-dark.png',
+  lightOgImage: 'https://alojra.vercel.app/logo-light.png',
   links: {
     twitter: '@omarnazihcs',
   }
