@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Bus, Car, Settings, User } from "lucide-react";
+import { Bus, Car, Settings, User, Moon, Sun, RotateCcw, Info, ArrowLeftRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dialog";
 import { vehiclePresets, type VehicleType } from '../types/vehicles';
 import { type Passenger } from '../types/passenger';
-import { Moon, Sun, RotateCcw, Info } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Footer } from "@/components/footer";
 import { Instructions } from "@/components/instructions";
@@ -71,6 +70,8 @@ export default function Home() {
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [isAutoOpened, setIsAutoOpened] = useState(false);
   const [selectedPassengersForPayment, setSelectedPassengersForPayment] = useState<number[]>([]);
+  const [changeModalPassenger, setChangeModalPassenger] = useState<Passenger | null>(null);
+  const [partialChangeAmount, setPartialChangeAmount] = useState<number>(0);
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -154,15 +155,21 @@ export default function Home() {
     setError(null);
     
     try {
-      const totalPassengers = selectedPassengersForPayment.length + 1;
-      const amountPerPerson = formatNumber(Math.min(paymentAmount / totalPassengers, costPerPerson));
+      // If special payment, ignore selected passengers
+      const isSpecial = selectedPassenger?.isSpecialPayment;
+      const effectivePassengers = isSpecial ? [] : selectedPassengersForPayment;
+      const totalPassengers = effectivePassengers.length + 1;
+      
+      const effectiveCostPerPerson = isSpecial ? paymentAmount : costPerPerson;
+      const amountPerPerson = formatNumber(Math.min(paymentAmount / totalPassengers, effectiveCostPerPerson));
       const remainingAmount = formatNumber(paymentAmount - (amountPerPerson * totalPassengers));
       
       trackEvent('payment_made', {
         amount: paymentAmount,
         passengers_count: totalPassengers,
         amount_per_person: amountPerPerson,
-        remaining_amount: remainingAmount
+        remaining_amount: remainingAmount,
+        is_special: isSpecial
       });
 
       setPassengers(prev => prev.map(p => {
@@ -170,10 +177,11 @@ export default function Home() {
           return { 
             ...p, 
             paid: formatNumber(amountPerPerson + remainingAmount),
-            paidFor: selectedPassengersForPayment 
+            paidFor: isSpecial ? [] : effectivePassengers,
+            isSpecialPayment: isSpecial
           };
         }
-        if (selectedPassengersForPayment.includes(p.id)) {
+        if (!isSpecial && effectivePassengers.includes(p.id)) {
           return { 
             ...p, 
             paid: formatNumber(amountPerPerson),
@@ -269,6 +277,9 @@ export default function Home() {
   };
 
   const getTotalRequired = () => {
+    if (selectedPassenger?.isSpecialPayment) {
+      return formatNumber(paymentAmount);
+    }
     return formatNumber(costPerPerson * (selectedPassengersForPayment.length + 1));
   };
 
@@ -287,6 +298,33 @@ export default function Home() {
       const change = passenger.paid > costPerPerson ? passenger.paid - costPerPerson : 0;
       return sum + (passenger.changeGiven ? 0 : change);
     }, 0));
+  };
+
+  const handleChangeClick = (e: React.MouseEvent, passenger: Passenger) => {
+    e.stopPropagation();
+    setChangeModalPassenger(passenger);
+  };
+
+  const handlePartialChange = (passenger: Passenger, amount: number) => {
+    if (!amount || amount <= 0) return;
+    
+    const totalChange = passenger.paid - costPerPerson;
+    const validAmount = Math.min(amount, totalChange);
+    
+    setPassengers(prev => prev.map(p => {
+      if (p.id === passenger.id) {
+        const newPaid = p.paid - validAmount;
+        return { 
+          ...p, 
+          paid: formatNumber(newPaid),
+          changeGiven: newPaid <= costPerPerson
+        };
+      }
+      return p;
+    }));
+    
+    setPartialChangeAmount(0);
+    setChangeModalPassenger(null);
   };
 
   return (
@@ -447,11 +485,20 @@ export default function Home() {
                       دفع عن: {passenger.paidFor.map(id => passengers.find(p => p.id === id)?.seatNumber).join(', ')}
                     </p>
                   )}
-                  {passenger.paid > 0 && !passenger.changeGiven && (
-                    <p className={passenger.paid > costPerPerson ? 'text-red-500' : 'text-green-500'}>
+                  {passenger.paid > 0 && !passenger.changeGiven && !passenger.isSpecialPayment && (
+                    <p 
+                      className={`
+                        ${passenger.paid > costPerPerson ? 'text-red-500' : 'text-green-500'}
+                        cursor-pointer hover:underline flex items-center gap-2 
+                        transition-all duration-200 hover:scale-105
+                        rounded-md py-1 px-1 hover:bg-muted
+                      `}
+                      onClick={(e) => passenger.paid > costPerPerson && handleChangeClick(e, passenger)}
+                    >
+                      <ArrowLeftRight className="h-4 w-4" />
                       {passenger.paid > costPerPerson 
                         ? `يجب إرجاع: ${formatNumber(passenger.paid - costPerPerson)} جنية`
-                        : passenger.paid < costPerPerson 
+                        : passenger.paid < costPerPerson
                           ? `متبقي: ${formatNumber(costPerPerson - passenger.paid)} جنية`
                           : 'تم الدفع بالكامل'
                       }
@@ -505,30 +552,59 @@ export default function Home() {
             <div className="mt-6 space-y-4">
               <div>
                 <Label>المبلغ المدفوع</Label>
-                {paymentAmount > 0 && paymentAmount < getTotalRequired() && (
-                  <p className="text-sm text-red-500 mb-2">
+                <div className="space-y-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    max={PAYMENT_LIMIT}
+                    step="0.01"
+                    value={paymentAmount || ''}
+                    onChange={(e) => handlePaymentAmountChange(Number(e.target.value))}
+                    placeholder="أدخل المبلغ"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="special-payment"
+                      checked={selectedPassenger?.isSpecialPayment}
+                      onCheckedChange={(checked) => {
+                        if (selectedPassenger) {
+                          setSelectedPassenger({
+                            ...selectedPassenger,
+                            isSpecialPayment: !!checked
+                          });
+                          // Clear selected passengers when switching to special payment
+                          if (checked) {
+                            setSelectedPassengersForPayment([]);
+                          }
+                        }
+                      }}
+                    />
+                    <Label htmlFor="special-payment">دفع مبلغ مخصص</Label>
+                  </div>
+                </div>
+                {paymentAmount > 0 && paymentAmount < getTotalRequired() && !selectedPassenger?.isSpecialPayment && (
+                  <p className="text-sm text-red-500 mt-2">
                     يجب إدخال المبلغ المطلوب ({getTotalRequired()} جنية) أو أكثر
                   </p>
                 )}
-                <Input
-                  type="number"
-                  min="0"
-                  max={PAYMENT_LIMIT}
-                  step="0.01"
-                  value={paymentAmount || ''}
-                  onChange={(e) => handlePaymentAmountChange(Number(e.target.value))}
-                  placeholder="أدخل المبلغ"
-                />
               </div>
 
               <div>
-                <Label>دفع عن الركاب</Label>
-                <div className="space-y-2 mt-2 max-h-40 overflow-y-auto border rounded-md p-2">
+                <Label className="flex items-center gap-2">
+                  دفع عن الركاب
+                  {selectedPassenger?.isSpecialPayment && (
+                    <span className="text-sm text-muted-foreground">(غير متاح مع الدفع المخصص)</span>
+                  )}
+                </Label>
+                <div className={`space-y-2 mt-2 max-h-40 overflow-y-auto border rounded-md p-2 ${
+                  selectedPassenger?.isSpecialPayment ? 'opacity-50 pointer-events-none' : ''
+                }`}>
                   <div className="flex items-center gap-2 pb-2 border-b">
                     <Checkbox 
                       id="select-all"
                       checked={selectedPassengersForPayment.length === passengers.filter(p => !p.paid && p.id !== selectedPassenger?.id).length}
                       onCheckedChange={(checked) => {
+                        if (selectedPassenger?.isSpecialPayment) return;
                         if (checked) {
                           const allUnpaidIds = passengers
                             .filter(p => !p.paid && p.id !== selectedPassenger?.id)
@@ -538,6 +614,7 @@ export default function Home() {
                           setSelectedPassengersForPayment([]);
                         }
                       }}
+                      disabled={selectedPassenger?.isSpecialPayment}
                     />
                     <label htmlFor="select-all">تحديد الكل</label>
                   </div>
@@ -549,12 +626,14 @@ export default function Home() {
                           id={`passenger-${p.id}`}
                           checked={selectedPassengersForPayment.includes(p.id)}
                           onCheckedChange={(checked) => {
+                            if (selectedPassenger?.isSpecialPayment) return;
                             setSelectedPassengersForPayment(prev => 
                               checked 
                                 ? [...prev, p.id]
                                 : prev.filter(id => id !== p.id)
                             );
                           }}
+                          disabled={selectedPassenger?.isSpecialPayment}
                         />
                         <label htmlFor={`passenger-${p.id}`}>راكب {p.seatNumber}</label>
                       </div>
@@ -564,11 +643,13 @@ export default function Home() {
 
               {paymentAmount > 0 && (
                 <div className="p-3 bg-muted rounded-lg space-y-2">
+                  {!selectedPassenger?.isSpecialPayment && (
+                    <p>
+                      عدد الركاب: {selectedPassengersForPayment.length + 1}
+                    </p>
+                  )}
                   <p>
-                    عدد الركاب: {selectedPassengersForPayment.length + 1}
-                  </p>
-                  <p>
-                    الإجمالي المطلوب: {costPerPerson * (selectedPassengersForPayment.length + 1)} جنية
+                    الإجمالي المطلوب: {getTotalRequired()} جنية
                   </p>
                   <p className={paymentAmount > getTotalRequired() ? 'text-red-500' : 'text-green-500'}>
                     {getPaymentStatus()}
@@ -580,7 +661,11 @@ export default function Home() {
             <DialogFooter className="mt-6 flex flex-col gap-2">
               <Button 
                 onClick={() => selectedPassenger && handlePayment(selectedPassenger.id)}
-                disabled={!paymentAmount || isProcessing || paymentAmount < getTotalRequired()}
+                disabled={
+                  !paymentAmount || 
+                  isProcessing || 
+                  (!selectedPassenger?.isSpecialPayment && paymentAmount < getTotalRequired())
+                }
                 className="w-full"
               >
                 {isProcessing ? 'جاري التسجيل...' : 'تأكيد الدفع'}
@@ -592,6 +677,69 @@ export default function Home() {
                 onClick={() => setSelectedPassenger(null)}
               >
                 إلغاء
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog 
+          open={!!changeModalPassenger} 
+          onOpenChange={(open) => !open && setChangeModalPassenger(null)}
+        >
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>الباقي للراكب {changeModalPassenger?.seatNumber}</DialogTitle>
+            </DialogHeader>
+            
+            <div className="py-4 space-y-4">
+              <p className="text-xl font-bold text-center">
+                المبلغ المتبقي: {changeModalPassenger && formatNumber(changeModalPassenger.paid - costPerPerson)} جنية
+              </p>
+              
+              <div className="space-y-2">
+                <Label>المبلغ المراد إرجاعه</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max={changeModalPassenger ? changeModalPassenger.paid - costPerPerson : 0}
+                  step="0.01"
+                  value={partialChangeAmount || ''}
+                  onChange={(e) => setPartialChangeAmount(Number(e.target.value))}
+                  placeholder="أدخل المبلغ"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="flex flex-col gap-2">
+              <Button 
+                onClick={() => changeModalPassenger && handlePartialChange(changeModalPassenger, partialChangeAmount)}
+                disabled={!partialChangeAmount || partialChangeAmount <= 0}
+                className="w-full"
+              >
+                تم إرجاع {partialChangeAmount || 0} جنية
+              </Button>
+              <Button 
+                onClick={() => {
+                  if (changeModalPassenger) {
+                    handlePartialChange(
+                      changeModalPassenger,
+                      changeModalPassenger.paid - costPerPerson
+                    );
+                  }
+                }}
+                className="w-full"
+              >
+                تم إرجاع كل الباقي
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setChangeModalPassenger(null);
+                  setPartialChangeAmount(0);
+                }}
+                className="w-full"
+              >
+                إغلاق
               </Button>
             </DialogFooter>
           </DialogContent>
