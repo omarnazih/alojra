@@ -1,45 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Bus, Car, Settings, User, Moon, Sun, RotateCcw, Info, ArrowLeftRight } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { vehiclePresets, type VehicleType } from '../types/vehicles';
 import { type Passenger } from '../types/passenger';
-import { useTheme } from "next-themes";
 import { Footer } from "@/components/footer";
 import { Instructions } from "@/components/instructions";
-import { Label } from "@/components/ui/label";
-import Image from 'next/image';
+import { Header } from "@/components/header";
+import { VehicleSelector } from "@/components/vehicle-selector";
+import { TripSummary } from "@/components/trip-summary";
+import { PassengerCard } from "@/components/passenger-card";
+import { PaymentModal } from "@/components/modals/payment-modal";
+import { ChangeModal } from "@/components/modals/change-modal";
 
 const trackEvent = (eventName: string, properties?: Record<string, any>) => {
   if (typeof window !== 'undefined' && (window as any).gtag) {
     (window as any).gtag('event', eventName, properties);
-  }
-};
-
-const getVehicleIcon = (type: VehicleType) => {
-  switch (type) {
-    case 'microbus':
-      return <Car className="ml-2 h-5 w-5" />;
-    case 'bus':
-      return <Bus className="ml-2 h-5 w-5" />;
-    case 'taxi':
-      return <Car className="ml-2 h-5 w-5" />;
-    case 'custom':
-      return <Settings className="ml-2 h-5 w-5" />;
-    default:
-      return null;
   }
 };
 
@@ -64,7 +40,6 @@ export default function Home() {
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [selectedPassenger, setSelectedPassenger] = useState<Passenger | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const { theme, setTheme } = useTheme();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [instructionsOpen, setInstructionsOpen] = useState(false);
@@ -203,7 +178,7 @@ export default function Home() {
   };
 
   const handleChangeGiven = (
-    e: React.MouseEvent<HTMLDivElement, MouseEvent>, 
+    e: React.MouseEvent<Element>,
     passengerId: number, 
     given: boolean
   ) => {
@@ -215,21 +190,6 @@ export default function Home() {
       }
       return p;
     }));
-  };
-
-  const getChangeAmount = (paid: number) => {
-    return formatNumber(paid - costPerPerson);
-  };
-
-  const getTotalPaid = () => {
-    return formatNumber(passengers.reduce((sum, passenger) => {
-      const effectivePaid = passenger.paid >= costPerPerson ? costPerPerson : passenger.paid;
-      return sum + effectivePaid;
-    }, 0));
-  };
-
-  const getRemainingTotal = () => {
-    return formatNumber(totalCost - getTotalPaid());
   };
 
   const handleCostChange = (cost: number) => {
@@ -276,30 +236,6 @@ export default function Home() {
     setSelectedPassenger(resetState.selectedPassenger);
   };
 
-  const getTotalRequired = () => {
-    if (selectedPassenger?.isSpecialPayment) {
-      return formatNumber(paymentAmount);
-    }
-    return formatNumber(costPerPerson * (selectedPassengersForPayment.length + 1));
-  };
-
-  const getPaymentStatus = () => {
-    const total = getTotalRequired();
-    if (paymentAmount > total) {
-      return `البقي للراكب: ${formatNumber(paymentAmount - total)} جنية`;
-    } else if (paymentAmount < total) {
-      return `متبقي: ${formatNumber(total - paymentAmount)} جنية`;
-    }
-    return 'المبلغ مضبوط';
-  };
-
-  const getTotalChange = () => {
-    return formatNumber(passengers.reduce((sum, passenger) => {
-      const change = passenger.paid > costPerPerson ? passenger.paid - costPerPerson : 0;
-      return sum + (passenger.changeGiven ? 0 : change);
-    }, 0));
-  };
-
   const handleChangeClick = (e: React.MouseEvent, passenger: Passenger) => {
     e.stopPropagation();
     setChangeModalPassenger(passenger);
@@ -339,68 +275,12 @@ export default function Home() {
         isAutoOpened={isAutoOpened}
       />
       <main className="container mx-auto p-4 pb-20 max-w-3xl">
-        <div className="flex justify-between items-center mb-8 relative p-4 rounded-lg bg-gradient-to-r from-primary/10 via-transparent to-primary/10 overflow-hidden">
-          <div className="absolute inset-0 opacity-30">
-            <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(68,68,68,.2)_25%,rgba(68,68,68,.2)_50%,transparent_50%,transparent_75%,rgba(68,68,68,.2)_75%)] bg-[length:10px_10px]" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_500px_at_50%_50%,rgba(255,255,255,0.1),transparent)]" />
-            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[length:20px_20px]" />
-            <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[length:20px_20px]" />
-          </div>
-          
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleReset}
-            className="h-10 w-10 rounded-full relative z-10"
-          >
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-          <div className="flex items-center gap-2 relative z-10">
-            <div className="relative w-40 h-16">
-              <Image
-                src="/logo-light.png"
-                alt="حاسبة الأجرة"
-                fill
-                className="object-contain dark:hidden [&>*]:!whitespace-nowrap"
-                priority
-              />
-              <Image
-                src="/logo-dark.png"
-                alt="حاسبة الأجرة"
-                fill
-                className="object-contain hidden dark:block [&>*]:!whitespace-nowrap"
-                priority
-              />
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              const newTheme = theme === 'dark' ? 'light' : 'dark';
-              trackEvent('theme_changed', { new_theme: newTheme });
-              setTheme(newTheme);
-            }}
-            className="h-10 w-10 rounded-full relative z-10"
-          >
-            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          </Button>
-        </div>
+        <Header onReset={handleReset} />
         
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {vehiclePresets.map((vehicle) => (
-            <Button
-              key={vehicle.type}
-              variant={selectedVehicle === vehicle.type ? "default" : "outline"}
-              onClick={() => handleVehicleSelect(vehicle.type)}
-              className="flex items-center justify-center h-12 w-full gap-2 px-3"
-            >
-              {getVehicleIcon(vehicle.type)}
-              <span>{vehicle.name}</span>
-            </Button>
-          ))}
-        </div>
+        <VehicleSelector 
+          selectedVehicle={selectedVehicle}
+          onVehicleSelect={handleVehicleSelect}
+        />
 
         {selectedVehicle === 'custom' && (
           <div className="mb-6">
@@ -429,321 +309,72 @@ export default function Home() {
         </div>
 
         {selectedVehicle && costPerPerson > 0 && (
-          <Card className="p-4 mb-6 bg-muted">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h3 className="text-lg font-semibold">عدد الركاب</h3>
-                <p className="text-2xl font-bold">{getCapacity()}</p>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">إجمالي الأجرة</h3>
-                <p className="text-2xl font-bold">{formatNumber(totalCost)} جنية</p>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">تم تحصيل</h3>
-                <p className="text-2xl font-bold text-green-500">{getTotalPaid()} جنية</p>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">المتبقي</h3>
-                <p className={`text-2xl font-bold ${getRemainingTotal() > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                  {getRemainingTotal()} جنية
-                </p>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">مجموع الباقي</h3>
-                <p className={`text-2xl font-bold ${getTotalChange() > 0 ? 'text-yellow-500' : 'text-green-500'}`}>
-                  {getTotalChange()} جنية
-                </p>
-              </div>
-            </div>
-          </Card>
+          <TripSummary 
+            capacity={getCapacity()}
+            totalCost={totalCost}
+            passengers={passengers}
+            costPerPerson={costPerPerson}
+          />
         )}
 
         {selectedVehicle && passengers.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-6">
             {passengers.map((passenger) => (
-              <Card 
+              <PassengerCard
                 key={passenger.id}
-                className={`p-4 cursor-pointer ${
-                  passenger.paid ? 'border-green-500' : 'border-gray-200'
-                }`}
-                onClick={() => setSelectedPassenger(passenger)}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <User className="h-5 w-5" />
-                  <h3 className="text-lg font-semibold">راكب {passenger.seatNumber}</h3>
-                </div>
-                <div className="space-y-2">
-                  <p>دفع: {passenger.paid} جنية</p>
-                  {passenger.paidBy && (
-                    <p className="text-sm text-muted-foreground">
-                      دفع عنه راكب {passengers.find(p => p.id === passenger.paidBy)?.seatNumber}
-                    </p>
-                  )}
-                  {passenger.paidFor && passenger.paidFor.length > 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      دفع عن: {passenger.paidFor.map(id => passengers.find(p => p.id === id)?.seatNumber).join(', ')}
-                    </p>
-                  )}
-                  {passenger.paid > 0 && !passenger.changeGiven && !passenger.isSpecialPayment && (
-                    <p 
-                      className={`
-                        ${passenger.paid > costPerPerson ? 'text-red-500' : 'text-green-500'}
-                        cursor-pointer hover:underline flex items-center gap-2 
-                        transition-all duration-200 hover:scale-105
-                        rounded-md py-1 px-1 hover:bg-muted
-                      `}
-                      onClick={(e) => passenger.paid > costPerPerson && handleChangeClick(e, passenger)}
-                    >
-                      <ArrowLeftRight className="h-4 w-4" />
-                      {passenger.paid > costPerPerson 
-                        ? `يجب إرجاع: ${formatNumber(passenger.paid - costPerPerson)} جنية`
-                        : passenger.paid < costPerPerson
-                          ? `متبقي: ${formatNumber(costPerPerson - passenger.paid)} جنية`
-                          : 'تم الدفع بالكامل'
-                      }
-                    </p>
-                  )}
-                  {passenger.paid > costPerPerson && (
-                    <div 
-                      className="flex items-center gap-2"
-                      onClick={(e) => handleChangeGiven(e, passenger.id, !passenger.changeGiven)}
-                    >
-                      <Checkbox 
-                        id={`change-${passenger.id}`}
-                        checked={passenger.changeGiven}
-                      />
-                      <label htmlFor={`change-${passenger.id}`}>تم إعطاء الباقي</label>
-                    </div>
-                  )}
-                </div>
-              </Card>
+                passenger={passenger}
+                costPerPerson={costPerPerson}
+                onPassengerSelect={setSelectedPassenger}
+                onChangeClick={handleChangeClick}
+                onChangeGiven={handleChangeGiven}
+                passengers={passengers}
+              />
             ))}
           </div>
         )}
 
-        <Dialog 
-          open={!!selectedPassenger} 
-          onOpenChange={(open) => !open && setSelectedPassenger(null)}
-        >
-          <DialogContent 
-            className="sm:max-w-[425px]"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && paymentAmount > 0) {
-                selectedPassenger && handlePayment(selectedPassenger.id);
+        <PaymentModal
+          selectedPassenger={selectedPassenger}
+          paymentAmount={paymentAmount}
+          costPerPerson={costPerPerson}
+          isProcessing={isProcessing}
+          error={error}
+          selectedPassengersForPayment={selectedPassengersForPayment}
+          passengers={passengers}
+          onClose={() => setSelectedPassenger(null)}
+          onPayment={handlePayment}
+          onPaymentAmountChange={handlePaymentAmountChange}
+          onPassengerSelectionChange={(checked, passengerId) => {
+            setSelectedPassengersForPayment(prev => 
+              checked 
+                ? [...prev, passengerId]
+                : prev.filter(id => id !== passengerId)
+            );
+          }}
+          onSpecialPaymentChange={(checked) => {
+            if (selectedPassenger) {
+              setSelectedPassenger({
+                ...selectedPassenger,
+                isSpecialPayment: checked
+              });
+              if (checked) {
+                setSelectedPassengersForPayment([]);
               }
-              if (e.key === 'Escape') {
-                setSelectedPassenger(null);
-              }
-            }}
-          >
-            <DialogHeader>
-              <DialogTitle>دفع الأجرة - راكب {selectedPassenger?.seatNumber}</DialogTitle>
-              <DialogDescription>
-                المطلوب: {costPerPerson} جنية
-                {selectedPassenger?.paid && (
-                  <p className="mt-2">
-                    المدفوع حالياً: {selectedPassenger.paid} جنية
-                  </p>
-                )}
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="mt-6 space-y-4">
-              <div>
-                <Label>المبلغ المدفوع</Label>
-                <div className="space-y-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    max={PAYMENT_LIMIT}
-                    step="0.01"
-                    value={paymentAmount || ''}
-                    onChange={(e) => handlePaymentAmountChange(Number(e.target.value))}
-                    placeholder="أدخل المبلغ"
-                  />
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="special-payment"
-                      checked={selectedPassenger?.isSpecialPayment}
-                      onCheckedChange={(checked) => {
-                        if (selectedPassenger) {
-                          setSelectedPassenger({
-                            ...selectedPassenger,
-                            isSpecialPayment: !!checked
-                          });
-                          // Clear selected passengers when switching to special payment
-                          if (checked) {
-                            setSelectedPassengersForPayment([]);
-                          }
-                        }
-                      }}
-                    />
-                    <Label htmlFor="special-payment">دفع مبلغ مخصص</Label>
-                  </div>
-                </div>
-                {paymentAmount > 0 && paymentAmount < getTotalRequired() && !selectedPassenger?.isSpecialPayment && (
-                  <p className="text-sm text-red-500 mt-2">
-                    يجب إدخال المبلغ المطلوب ({getTotalRequired()} جنية) أو أكثر
-                  </p>
-                )}
-              </div>
+            }
+          }}
+        />
 
-              <div>
-                <Label className="flex items-center gap-2">
-                  دفع عن الركاب
-                  {selectedPassenger?.isSpecialPayment && (
-                    <span className="text-sm text-muted-foreground">(غير متاح مع الدفع المخصص)</span>
-                  )}
-                </Label>
-                <div className={`space-y-2 mt-2 max-h-40 overflow-y-auto border rounded-md p-2 ${
-                  selectedPassenger?.isSpecialPayment ? 'opacity-50 pointer-events-none' : ''
-                }`}>
-                  <div className="flex items-center gap-2 pb-2 border-b">
-                    <Checkbox 
-                      id="select-all"
-                      checked={selectedPassengersForPayment.length === passengers.filter(p => !p.paid && p.id !== selectedPassenger?.id).length}
-                      onCheckedChange={(checked) => {
-                        if (selectedPassenger?.isSpecialPayment) return;
-                        if (checked) {
-                          const allUnpaidIds = passengers
-                            .filter(p => !p.paid && p.id !== selectedPassenger?.id)
-                            .map(p => p.id);
-                          setSelectedPassengersForPayment(allUnpaidIds);
-                        } else {
-                          setSelectedPassengersForPayment([]);
-                        }
-                      }}
-                      disabled={selectedPassenger?.isSpecialPayment}
-                    />
-                    <label htmlFor="select-all">تحديد الكل</label>
-                  </div>
-                  {passengers
-                    .filter(p => !p.paid && p.id !== selectedPassenger?.id)
-                    .map(p => (
-                      <div key={p.id} className="flex items-center gap-2">
-                        <Checkbox 
-                          id={`passenger-${p.id}`}
-                          checked={selectedPassengersForPayment.includes(p.id)}
-                          onCheckedChange={(checked) => {
-                            if (selectedPassenger?.isSpecialPayment) return;
-                            setSelectedPassengersForPayment(prev => 
-                              checked 
-                                ? [...prev, p.id]
-                                : prev.filter(id => id !== p.id)
-                            );
-                          }}
-                          disabled={selectedPassenger?.isSpecialPayment}
-                        />
-                        <label htmlFor={`passenger-${p.id}`}>راكب {p.seatNumber}</label>
-                      </div>
-                    ))}
-                </div>
-              </div>
-
-              {paymentAmount > 0 && (
-                <div className="p-3 bg-muted rounded-lg space-y-2">
-                  {!selectedPassenger?.isSpecialPayment && (
-                    <p>
-                      عدد الركاب: {selectedPassengersForPayment.length + 1}
-                    </p>
-                  )}
-                  <p>
-                    الإجمالي المطلوب: {getTotalRequired()} جنية
-                  </p>
-                  <p className={paymentAmount > getTotalRequired() ? 'text-red-500' : 'text-green-500'}>
-                    {getPaymentStatus()}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <DialogFooter className="mt-6 flex flex-col gap-2">
-              <Button 
-                onClick={() => selectedPassenger && handlePayment(selectedPassenger.id)}
-                disabled={
-                  !paymentAmount || 
-                  isProcessing || 
-                  (!selectedPassenger?.isSpecialPayment && paymentAmount < getTotalRequired())
-                }
-                className="w-full"
-              >
-                {isProcessing ? 'جاري التسجيل...' : 'تأكيد الدفع'}
-              </Button>
-              {error && <p className="text-red-500 text-sm">{error}</p>}
-              <Button 
-                variant="outline" 
-                className="w-full"
-                onClick={() => setSelectedPassenger(null)}
-              >
-                إلغاء
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog 
-          open={!!changeModalPassenger} 
-          onOpenChange={(open) => !open && setChangeModalPassenger(null)}
-        >
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>الباقي للراكب {changeModalPassenger?.seatNumber}</DialogTitle>
-            </DialogHeader>
-            
-            <div className="py-4 space-y-4">
-              <p className="text-xl font-bold text-center">
-                المبلغ المتبقي: {changeModalPassenger && formatNumber(changeModalPassenger.paid - costPerPerson)} جنية
-              </p>
-              
-              <div className="space-y-2">
-                <Label>المبلغ المراد إرجاعه</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max={changeModalPassenger ? changeModalPassenger.paid - costPerPerson : 0}
-                  step="0.01"
-                  value={partialChangeAmount || ''}
-                  onChange={(e) => setPartialChangeAmount(Number(e.target.value))}
-                  placeholder="أدخل المبلغ"
-                />
-              </div>
-            </div>
-
-            <DialogFooter className="flex flex-col gap-2">
-              <Button 
-                onClick={() => changeModalPassenger && handlePartialChange(changeModalPassenger, partialChangeAmount)}
-                disabled={!partialChangeAmount || partialChangeAmount <= 0}
-                className="w-full"
-              >
-                تم إرجاع {partialChangeAmount || 0} جنية
-              </Button>
-              <Button 
-                onClick={() => {
-                  if (changeModalPassenger) {
-                    handlePartialChange(
-                      changeModalPassenger,
-                      changeModalPassenger.paid - costPerPerson
-                    );
-                  }
-                }}
-                className="w-full"
-              >
-                تم إرجاع كل الباقي
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setChangeModalPassenger(null);
-                  setPartialChangeAmount(0);
-                }}
-                className="w-full"
-              >
-                إغلاق
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <ChangeModal
+          passenger={changeModalPassenger}
+          costPerPerson={costPerPerson}
+          partialChangeAmount={partialChangeAmount}
+          onClose={() => {
+            setChangeModalPassenger(null);
+            setPartialChangeAmount(0);
+          }}
+          onPartialChange={handlePartialChange}
+          onPartialChangeAmountChange={setPartialChangeAmount}
+        />
       </main>
       <Footer 
         onInstructionsClick={() => {
