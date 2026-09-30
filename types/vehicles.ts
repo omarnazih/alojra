@@ -1,4 +1,4 @@
-export type VehicleType = 'microbus' | 'bus' | 'minibus' | 'taxi' | 'custom';
+export type VehicleType = 'microbus' | 'bus' | 'taxi' | 'custom';
 
 export interface VehiclePreset {
   type: VehicleType;

@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Bus, Car, Settings, User, Moon, Sun, RotateCcw, Info, ArrowLeftRight } from "lucide-react";
+import { Bus, Car, Settings, User, Moon, Sun, RotateCcw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -20,11 +20,14 @@ import { useTheme } from "next-themes";
 import { Footer } from "@/components/footer";
 import { Instructions } from "@/components/instructions";
 import { Label } from "@/components/ui/label";
+import { SeatMap } from "@/components/seat-map";
+import { buildSeatLayout } from "@/config/seat-layouts";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import Image from 'next/image';
 
-const trackEvent = (eventName: string, properties?: Record<string, any>) => {
-  if (typeof window !== 'undefined' && (window as any).gtag) {
-    (window as any).gtag('event', eventName, properties);
+const trackEvent = (eventName: string, properties?: Record<string, unknown>) => {
+  if (typeof window !== 'undefined') {
+    window.gtag?.('event', eventName, properties);
   }
 };
 
@@ -72,11 +75,20 @@ export default function Home() {
   const [selectedPassengersForPayment, setSelectedPassengersForPayment] = useState<number[]>([]);
   const [changeModalPassenger, setChangeModalPassenger] = useState<Passenger | null>(null);
   const [partialChangeAmount, setPartialChangeAmount] = useState<number>(0);
+  const [viewMode, setViewMode] = useState<'map' | 'cards'>('map');
+  const [pendingFareChange, setPendingFareChange] = useState<{ from: number; to: number } | null>(null);
+  const [pendingVehicleChange, setPendingVehicleChange] = useState<VehicleType | null>(null);
 
-  // Load state from localStorage on mount
+  // Load state from localStorage on mount.
+  // Hydration-safe restore: localStorage does not exist during SSR, so a saved
+  // trip can only be applied after mount. A lazy useState initializer would render
+  // different markup on the client than the server.
+  /* eslint-disable react-hooks/set-state-in-effect -- applying persisted state after mount */
   useEffect(() => {
     const savedState = localStorage.getItem('ojraState');
-    if (savedState) {
+    if (!savedState) return;
+
+    try {
       const { 
         selectedVehicle: savedVehicle,
         costPerPerson: savedCost,
@@ -88,8 +100,12 @@ export default function Home() {
       setCostPerPerson(savedCost);
       setCustomCapacity(savedCapacity);
       setPassengers(savedPassengers);
+    } catch {
+      // Corrupt or outdated payload: start from a clean trip instead of crashing.
+      localStorage.removeItem('ojraState');
     }
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Save state to localStorage when it changes
   useEffect(() => {
@@ -101,7 +117,11 @@ export default function Home() {
     }));
   }, [selectedVehicle, costPerPerson, customCapacity, passengers]);
 
-  // Check if we should show instructions on mount
+  // Check if we should show instructions on mount.
+  // Deferred to an effect for the same reason as the restore above: the server
+  // cannot know a localStorage preference, and opening the dialog during the
+  // first client render would not match the server HTML.
+  /* eslint-disable react-hooks/set-state-in-effect -- mount-time localStorage preference */
   useEffect(() => {
     const dontShowAgain = localStorage.getItem('dontShowInstructions');
     if (!dontShowAgain) {
@@ -109,6 +129,7 @@ export default function Home() {
       setIsAutoOpened(true);
     }
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleDontShowAgain = (checked: boolean) => {
     if (checked) {
@@ -118,12 +139,17 @@ export default function Home() {
     }
   };
 
-  const getCapacity = () => {
+  const capacity = useMemo(() => {
     const preset = vehiclePresets.find(v => v.type === selectedVehicle);
     return selectedVehicle === 'custom' ? customCapacity : preset?.capacity || 0;
-  };
+  }, [selectedVehicle, customCapacity]);
 
-  const totalCost = costPerPerson * getCapacity();
+  const seatLayout = useMemo(
+    () => buildSeatLayout(selectedVehicle, capacity),
+    [selectedVehicle, capacity],
+  );
+
+  const totalCost = costPerPerson * capacity;
 
   const initializePassengers = (vehicleType: VehicleType, cost: number) => {
     const preset = vehiclePresets.find(v => v.type === vehicleType);
@@ -143,10 +169,25 @@ export default function Home() {
   };
 
   const handleVehicleSelect = (type: VehicleType) => {
+    if (pendingVehicleChange) {
+      setPendingVehicleChange(type);
+      return;
+    }
+    if (passengers.some(p => p.paid > 0) && type !== selectedVehicle) {
+      setPendingVehicleChange(type);
+      return;
+    }
+    applyVehicleChange(type);
+  };
+
+  const applyVehicleChange = (type: VehicleType) => {
     trackEvent('vehicle_selected', { vehicle_type: type });
     setSelectedVehicle(type);
     initializePassengers(type, costPerPerson);
+    setPendingVehicleChange(null);
   };
+
+  const cancelVehicleChange = () => setPendingVehicleChange(null);
 
   const handlePayment = async (passengerId: number) => {
     if (!paymentAmount) return;
@@ -194,20 +235,15 @@ export default function Home() {
       setPaymentAmount(0);
       setSelectedPassenger(null);
       setSelectedPassengersForPayment([]);
-    } catch (err: any) {
-      trackEvent('payment_error', { error: err.message });
+    } catch (err: unknown) {
+      trackEvent('payment_error', { error: err instanceof Error ? err.message : String(err) });
       setError('حدث خطأ أثناء تسجيل الدفع');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleChangeGiven = (
-    e: React.MouseEvent<HTMLDivElement, MouseEvent>, 
-    passengerId: number, 
-    given: boolean
-  ) => {
-    e.stopPropagation();
+  const handleChangeGiven = (passengerId: number, given: boolean) => {
     trackEvent('change_given', { passenger_id: passengerId, given });
     setPassengers(prev => prev.map(p => {
       if (p.id === passengerId) {
@@ -215,10 +251,6 @@ export default function Home() {
       }
       return p;
     }));
-  };
-
-  const getChangeAmount = (paid: number) => {
-    return formatNumber(paid - costPerPerson);
   };
 
   const getTotalPaid = () => {
@@ -236,9 +268,47 @@ export default function Home() {
     if (cost < 0) return;
     if (cost > PAYMENT_LIMIT) return;
     const validCost = isNaN(cost) ? 0 : formatNumber(cost);
+
+    // If the user is already editing inside the confirmation dialog, update the pending value.
+    if (pendingFareChange) {
+      setPendingFareChange({ ...pendingFareChange, to: validCost });
+      setCostPerPerson(validCost);
+      return;
+    }
+
+    // Guard fare changes that would alter existing payments.
+    if (passengers.length > 0 && passengers.some(p => p.paid > 0) && validCost !== costPerPerson) {
+      setPendingFareChange({ from: costPerPerson, to: validCost });
+      setCostPerPerson(validCost);
+      return;
+    }
+
+    applyFareChange(validCost);
+  };
+
+  const applyFareChange = (validCost: number) => {
     trackEvent('cost_changed', { new_cost: validCost });
     setCostPerPerson(validCost);
     initializePassengers(selectedVehicle, validCost);
+    setPendingFareChange(null);
+  };
+
+  const confirmFareChangeKeepPayments = () => {
+    if (!pendingFareChange) return;
+    trackEvent('cost_changed_keep_payments', { new_cost: pendingFareChange.to });
+    setCostPerPerson(pendingFareChange.to);
+    setPendingFareChange(null);
+  };
+
+  const confirmFareChangeResetPayments = () => {
+    if (!pendingFareChange) return;
+    applyFareChange(pendingFareChange.to);
+  };
+
+  const cancelFareChange = () => {
+    if (!pendingFareChange) return;
+    setCostPerPerson(pendingFareChange.from);
+    setPendingFareChange(null);
   };
 
   const handleCustomCapacityChange = (capacity: number) => {
@@ -300,11 +370,6 @@ export default function Home() {
     }, 0));
   };
 
-  const handleChangeClick = (e: React.MouseEvent, passenger: Passenger) => {
-    e.stopPropagation();
-    setChangeModalPassenger(passenger);
-  };
-
   const handlePartialChange = (passenger: Passenger, amount: number) => {
     if (!amount || amount <= 0) return;
     
@@ -351,6 +416,8 @@ export default function Home() {
             variant="outline"
             size="icon"
             onClick={handleReset}
+            aria-label="بدء رحلة جديدة"
+            title="بدء رحلة جديدة"
             className="h-10 w-10 rounded-full relative z-10"
           >
             <RotateCcw className="h-4 w-4" />
@@ -361,6 +428,7 @@ export default function Home() {
                 src="/logo-light.png"
                 alt="حاسبة الأجرة"
                 fill
+                sizes="160px"
                 className="object-contain dark:hidden [&>*]:!whitespace-nowrap"
                 priority
               />
@@ -368,6 +436,7 @@ export default function Home() {
                 src="/logo-dark.png"
                 alt="حاسبة الأجرة"
                 fill
+                sizes="160px"
                 className="object-contain hidden dark:block [&>*]:!whitespace-nowrap"
                 priority
               />
@@ -381,6 +450,8 @@ export default function Home() {
               trackEvent('theme_changed', { new_theme: newTheme });
               setTheme(newTheme);
             }}
+            aria-label="تبديل المظهر"
+            title="تبديل المظهر"
             className="h-10 w-10 rounded-full relative z-10"
           >
             <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
@@ -428,97 +499,172 @@ export default function Home() {
           />
         </div>
 
+        {selectedVehicle && costPerPerson === 0 && (
+          <Card className="mb-6 p-8 text-center">
+            <Bus className="mx-auto mb-3 h-10 w-10 text-muted-foreground" aria-hidden="true" />
+            <h3 className="mb-1 text-lg font-semibold">ابدأ رحلة جديدة</h3>
+            <p className="text-sm text-muted-foreground">
+              اختر نوع المركبة وأدخل الأجرة للراكب الواحد لتوليد خريطة المقاعد.
+            </p>
+          </Card>
+        )}
+
         {selectedVehicle && costPerPerson > 0 && (
-          <Card className="p-4 mb-6 bg-muted">
-            <div className="grid grid-cols-2 gap-4">
+          <Card className="mb-6 overflow-hidden">
+            <div className="grid grid-cols-3 gap-4 p-4 text-center">
               <div>
-                <h3 className="text-lg font-semibold">عدد الركاب</h3>
-                <p className="text-2xl font-bold">{getCapacity()}</p>
+                <p className="text-xs text-muted-foreground">عدد الركاب</p>
+                <p className="text-2xl font-bold tabular-nums">{capacity}</p>
               </div>
               <div>
-                <h3 className="text-lg font-semibold">إجمالي الأجرة</h3>
-                <p className="text-2xl font-bold">{formatNumber(totalCost)} جنية</p>
+                <p className="text-xs text-muted-foreground">إجمالي الأجرة</p>
+                <p className="text-2xl font-bold tabular-nums">{formatNumber(totalCost)} ج</p>
               </div>
               <div>
-                <h3 className="text-lg font-semibold">تم تحصيل</h3>
-                <p className="text-2xl font-bold text-green-500">{getTotalPaid()} جنية</p>
+                <p className="text-xs text-muted-foreground">تم تحصيل</p>
+                <p className="text-2xl font-bold tabular-nums text-green-600">{getTotalPaid()} ج</p>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold">المتبقي</h3>
-                <p className={`text-2xl font-bold ${getRemainingTotal() > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                  {getRemainingTotal()} جنية
-                </p>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">مجموع الباقي</h3>
-                <p className={`text-2xl font-bold ${getTotalChange() > 0 ? 'text-yellow-500' : 'text-green-500'}`}>
-                  {getTotalChange()} جنية
-                </p>
-              </div>
+            </div>
+            <div className="h-2 w-full bg-muted-foreground/20" aria-hidden="true">
+              <div
+                className="h-full bg-green-500 transition-all duration-500"
+                style={{
+                  width: `${totalCost > 0 ? Math.min((passengers.reduce((sum, p) => sum + (p.paid >= costPerPerson ? costPerPerson : p.paid), 0) / totalCost) * 100, 100) : 0}%`,
+                }}
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-muted p-3 text-sm">
+              <span className={getRemainingTotal() > 0 ? 'font-medium text-red-600' : 'font-medium text-green-600'}>
+                المتبقي: {getRemainingTotal()} ج
+              </span>
+              <span className={getTotalChange() > 0 ? 'font-medium text-yellow-600' : 'font-medium text-green-600'}>
+                مجموع الباقي: {getTotalChange()} ج
+              </span>
             </div>
           </Card>
         )}
 
         {selectedVehicle && passengers.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-6">
-            {passengers.map((passenger) => (
-              <Card 
-                key={passenger.id}
-                className={`p-4 cursor-pointer ${
-                  passenger.paid ? 'border-green-500' : 'border-gray-200'
-                }`}
-                onClick={() => setSelectedPassenger(passenger)}
+          <div className="mt-6 space-y-4">
+            <div className="flex justify-center">
+              <div
+                role="group"
+                aria-label="طريقة عرض الركاب"
+                className="inline-flex rounded-lg border bg-muted p-1"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <User className="h-5 w-5" />
-                  <h3 className="text-lg font-semibold">راكب {passenger.seatNumber}</h3>
-                </div>
-                <div className="space-y-2">
-                  <p>دفع: {passenger.paid} جنية</p>
-                  {passenger.paidBy && (
-                    <p className="text-sm text-muted-foreground">
-                      دفع عنه راكب {passengers.find(p => p.id === passenger.paidBy)?.seatNumber}
-                    </p>
-                  )}
-                  {passenger.paidFor && passenger.paidFor.length > 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      دفع عن: {passenger.paidFor.map(id => passengers.find(p => p.id === id)?.seatNumber).join(', ')}
-                    </p>
-                  )}
-                  {passenger.paid > 0 && !passenger.changeGiven && !passenger.isSpecialPayment && (
-                    <p 
-                      className={`
-                        ${passenger.paid > costPerPerson ? 'text-red-500' : 'text-green-500'}
-                        cursor-pointer hover:underline flex items-center gap-2 
-                        transition-all duration-200 hover:scale-105
-                        rounded-md py-1 px-1 hover:bg-muted
-                      `}
-                      onClick={(e) => passenger.paid > costPerPerson && handleChangeClick(e, passenger)}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === 'map' ? 'default' : 'ghost'}
+                  aria-pressed={viewMode === 'map'}
+                  onClick={() => {
+                    trackEvent('view_mode_changed', { view_mode: 'map' });
+                    setViewMode('map');
+                  }}
+                >
+                  خريطة المقاعد
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === 'cards' ? 'default' : 'ghost'}
+                  aria-pressed={viewMode === 'cards'}
+                  onClick={() => {
+                    trackEvent('view_mode_changed', { view_mode: 'cards' });
+                    setViewMode('cards');
+                  }}
+                >
+                  بطاقات الركاب
+                </Button>
+              </div>
+            </div>
+
+            {viewMode === 'map' ? (
+              <SeatMap
+                layout={seatLayout}
+                passengers={passengers}
+                costPerPerson={costPerPerson}
+                vehicle={selectedVehicle}
+                vehicleName={
+                  vehiclePresets.find(v => v.type === selectedVehicle)?.name ??
+                  (selectedVehicle === 'custom' ? 'مخصص' : '')
+                }
+                onSelectPassenger={setSelectedPassenger}
+              />
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {passengers.map((passenger) => {
+                  const isPaid = passenger.paid >= costPerPerson;
+                  const isPartial = passenger.paid > 0 && passenger.paid < costPerPerson;
+                  const hasChangeDue = passenger.paid > costPerPerson && !passenger.changeGiven;
+                  return (
+                    <Card
+                      key={passenger.id}
+                      className={`overflow-hidden ${isPaid ? 'border-green-500' : 'border-gray-200'}`}
                     >
-                      <ArrowLeftRight className="h-4 w-4" />
-                      {passenger.paid > costPerPerson 
-                        ? `يجب إرجاع: ${formatNumber(passenger.paid - costPerPerson)} جنية`
-                        : passenger.paid < costPerPerson
-                          ? `متبقي: ${formatNumber(costPerPerson - passenger.paid)} جنية`
-                          : 'تم الدفع بالكامل'
-                      }
-                    </p>
-                  )}
-                  {passenger.paid > costPerPerson && (
-                    <div 
-                      className="flex items-center gap-2"
-                      onClick={(e) => handleChangeGiven(e, passenger.id, !passenger.changeGiven)}
-                    >
-                      <Checkbox 
-                        id={`change-${passenger.id}`}
-                        checked={passenger.changeGiven}
-                      />
-                      <label htmlFor={`change-${passenger.id}`}>تم إعطاء الباقي</label>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            ))}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPassenger(passenger)}
+                        className="flex w-full items-center justify-between gap-2 p-4 text-right transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={`راكب ${passenger.seatNumber}، ${isPaid ? 'تم الدفع' : isPartial ? 'دفع جزئي' : 'لم يدفع'}، ${passenger.paid} جنية`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <User className="h-5 w-5" />
+                          <span className="text-lg font-semibold">راكب {passenger.seatNumber}</span>
+                        </div>
+                        <span className="text-sm font-medium">{passenger.paid} جنية</span>
+                      </button>
+                      <div className="space-y-2 px-4 pb-4">
+                        {passenger.paidBy && (
+                          <p className="text-sm text-muted-foreground">
+                            دفع عنه راكب {passengers.find(p => p.id === passenger.paidBy)?.seatNumber}
+                          </p>
+                        )}
+                        {passenger.paidFor && passenger.paidFor.length > 0 && (
+                          <p className="text-sm text-muted-foreground">
+                            دفع عن: {passenger.paidFor.map(id => passengers.find(p => p.id === id)?.seatNumber).join(', ')}
+                          </p>
+                        )}
+                        {passenger.paid < costPerPerson && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => setSelectedPassenger(passenger)}
+                          >
+                            تسجيل دفع
+                          </Button>
+                        )}
+                        {hasChangeDue && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950"
+                            onClick={() => setChangeModalPassenger(passenger)}
+                          >
+                            إرجاع {formatNumber(passenger.paid - costPerPerson)} جنية
+                          </Button>
+                        )}
+                        {passenger.paid > costPerPerson && (
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`change-${passenger.id}`}
+                              checked={passenger.changeGiven}
+                              onCheckedChange={(checked) => handleChangeGiven(passenger.id, checked === true)}
+                            />
+                            <label htmlFor={`change-${passenger.id}`} className="text-sm">
+                              تم إعطاء الباقي
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -529,8 +675,8 @@ export default function Home() {
           <DialogContent 
             className="sm:max-w-[425px]"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && paymentAmount > 0) {
-                selectedPassenger && handlePayment(selectedPassenger.id);
+              if (e.key === 'Enter' && paymentAmount > 0 && selectedPassenger) {
+                handlePayment(selectedPassenger.id);
               }
               if (e.key === 'Escape') {
                 setSelectedPassenger(null);
@@ -540,12 +686,12 @@ export default function Home() {
             <DialogHeader>
               <DialogTitle>دفع الأجرة - راكب {selectedPassenger?.seatNumber}</DialogTitle>
               <DialogDescription>
-                المطلوب: {costPerPerson} جنية
-                {selectedPassenger?.paid && (
-                  <p className="mt-2">
+                <span className="block">المطلوب: {costPerPerson} جنية</span>
+                {selectedPassenger?.paid ? (
+                  <span className="mt-2 block">
                     المدفوع حالياً: {selectedPassenger.paid} جنية
-                  </p>
-                )}
+                  </span>
+                ) : null}
               </DialogDescription>
             </DialogHeader>
             
@@ -744,6 +890,34 @@ export default function Home() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        <ConfirmDialog
+          open={!!pendingFareChange}
+          title="تغيير الأجرة"
+          description={
+            <span>
+              هناك مدفوعات مسجلة بالفعل. إذا استمررت، سيتم إعادة حساب حالة كل راكب بناءً على الأجرة الجديدة (
+              <strong>{pendingFareChange?.to} جنية</strong>).
+            </span>
+          }
+          actions={[
+            { label: 'إلغاء', variant: 'outline', onClick: cancelFareChange },
+            { label: 'تصفير المدفوعات', variant: 'destructive', onClick: confirmFareChangeResetPayments },
+            { label: 'الاحتفاظ بالمدفوعات', onClick: confirmFareChangeKeepPayments },
+          ]}
+          onCancel={cancelFareChange}
+        />
+
+        <ConfirmDialog
+          open={!!pendingVehicleChange}
+          title="تغيير المركبة"
+          description="سيتم مسح جميع المدفوعات عند تغيير نوع المركبة لأن عدد المقاعد سيختلف. هل تريد المتابعة؟"
+          actions={[
+            { label: 'إلغاء', variant: 'outline', onClick: cancelVehicleChange },
+            { label: 'متابعة', onClick: () => pendingVehicleChange && applyVehicleChange(pendingVehicleChange) },
+          ]}
+          onCancel={cancelVehicleChange}
+        />
+
       </main>
       <Footer 
         onInstructionsClick={() => {

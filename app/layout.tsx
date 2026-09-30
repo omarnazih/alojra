@@ -1,9 +1,17 @@
 import { defaultMetadata } from '@/config/metadata'
 import { Metadata } from 'next'
 import { ThemeProvider } from "next-themes"
+import { Noto_Sans_Arabic } from 'next/font/google'
 import "./globals.css"
 import Script from 'next/script'
 import { ErrorBoundary } from '@/components/error-boundary'
+
+const notoArabic = Noto_Sans_Arabic({
+  subsets: ['arabic'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-noto-arabic',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   ...defaultMetadata,
@@ -16,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ar" dir="rtl" suppressHydrationWarning>
+    <html lang="ar" dir="rtl" suppressHydrationWarning className={notoArabic.variable}>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#ffffff" />

@@ -1,27 +1,24 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const projectRoot = path.dirname(fileURLToPath(import.meta.url))
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   compress: true,
   poweredByHeader: false,
   reactStrictMode: true,
-  swcMinify: true,
+  // `images.domains` was removed in Next 16 in favor of `remotePatterns`.
+  // This app only serves local files from /public, so no remote patterns are needed.
   images: {
     formats: ['image/avif', 'image/webp'],
-    domains: ['alojra.vercel.app'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
-  experimental: {
-    optimizeCss: true,
-  },
-  webpack: (config, { dev, isServer }) => {
-    if (!dev && !isServer) {
-      config.optimization.splitChunks.cacheGroups.critters = {
-        test: /[\\/]node_modules[\\/]critters[\\/]/,
-        name: 'critters',
-        chunks: 'all',
-      }
-    }
-    return config
+  // Turbopack is the default bundler in Next 16. Pin its root to this project so
+  // an unrelated lockfile in a parent directory cannot change module resolution.
+  turbopack: {
+    root: projectRoot,
   },
 }
 
