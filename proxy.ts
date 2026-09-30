@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-export function middleware(request: NextRequest) {
+// Next.js 16 renamed the `middleware` file convention to `proxy`.
+// The behavior is unchanged: this runs before each matched request completes.
+export function proxy(request: NextRequest) {
   const response = NextResponse.next()
 
   // Add security headers
@@ -15,4 +17,4 @@ export function middleware(request: NextRequest) {
   }
 
   return response
-} 
+}
